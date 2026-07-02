@@ -1,0 +1,4 @@
+interface:
+  display_name: "LLM-Rec Baseline"
+  short_description: "Prepare and train the OneReason LLM-Rec competition baseline."
+  default_prompt: "Run the LLM-Rec baseline workflow: prepare the bundled SFT data, download the official OneReason model, train a LoRA baseline, and validate the upload artifacts."
