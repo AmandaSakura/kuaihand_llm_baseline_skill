@@ -8,6 +8,7 @@ This repository is intended for both humans and AI coding agents. It contains:
 - `llm-rec-baseline/scripts/run_baseline.sh`: one-command baseline runner.
 - `llm-rec-baseline/scripts/prepare_data.py`: unpack and validate the SFT data.
 - `llm-rec-baseline/scripts/train_lora_baseline.py`: train a PEFT LoRA adapter.
+- `llm-rec-baseline/scripts/local_eval.py`: optional proxy validation loss and generation sanity checks.
 - `llm-rec-baseline/scripts/validate_upload.py`: validate Wanqing upload artifacts.
 - `llm-rec-baseline/scripts/detect_profile.py`: choose conservative LoRA defaults from hardware.
 - `llm-rec-baseline/scripts/check_competition_compliance.py`: reject model configs that do not match the official OneReason-0.8B competition baseline.
@@ -282,6 +283,33 @@ In the Wanqing upload UI:
 - Version: for example `V1`
 
 Do not upload optimizer checkpoints, trainer state, tokenizer files, logs, or intermediate checkpoint folders unless the platform requirements change.
+
+## Optional Local Proxy Eval
+
+Official scores are black-box platform results. Local eval in this repository is only a proxy to filter obviously bad runs when you have many candidate adapters.
+
+After training:
+
+```bash
+python llm-rec-baseline/scripts/local_eval.py \
+  --model-id OpenOneRec/OneReason-0.8B-pretrain-competition \
+  --adapter-dir ./runs/baseline/output/lora-baseline \
+  --data-dir ./runs/baseline/data \
+  --max-length 4096 \
+  --max-examples 2048 \
+  --generation-samples 16 \
+  --output-json ./runs/baseline/local_eval.json
+```
+
+It reports:
+
+- overall validation loss and perplexity
+- per-task loss for `懂物料`, `懂用户`, `懂推荐`
+- per-file loss
+- optional greedy generation previews
+- semantic-ID token format rate on generated samples
+
+Use this to decide which candidates are worth one of the daily official submissions. Do not treat it as leaderboard score.
 
 ## Validate Upload Files Manually
 

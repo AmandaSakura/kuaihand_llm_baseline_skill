@@ -105,6 +105,22 @@ Use `SAMPLE_LIMIT` for smoke tests only. Keep it `0` for full-data training.
 
 `ATTN_IMPL=auto` resolves to PyTorch `sdpa` on CUDA and the Transformers default elsewhere. Use `ATTN_IMPL=flash_attention_2` only when `flash-attn` is already installed and compatible with the current CUDA/PyTorch stack. Use `ATTN_IMPL=eager` only for debugging, not long-sequence A100 training.
 
+## Optional Local Proxy Eval
+
+Do not present local eval as official scoring. Use it only to filter candidate adapters before spending daily black-box submissions.
+
+```bash
+python /Users/joker/.codex/skills/llm-rec-baseline/scripts/local_eval.py \
+  --model-id OpenOneRec/OneReason-0.8B-pretrain-competition \
+  --adapter-dir /path/to/run/output/lora-baseline \
+  --data-dir /path/to/run/data \
+  --max-length 4096 \
+  --max-examples 2048 \
+  --generation-samples 16
+```
+
+The script reports proxy validation loss/perplexity by task and file, plus optional semantic-ID format checks on generated samples.
+
 Official offline-training guidance says to use Transformers `v5.3.0`. If that exact package is unavailable in the current Python index, `run_baseline.sh` falls back to `4.53.0`, which matches the released model config, and prints a warning.
 
 `PROFILE=auto` detects CUDA, Apple MPS, or CPU and sets defaults only for unset variables. Use `PROFILE=custom` to disable hardware defaults entirely. Common explicit profiles are:

@@ -46,7 +46,7 @@ fi
 source "$VENV_DIR/bin/activate"
 
 "${PIP_INSTALL[@]}" --upgrade pip
-"${PIP_INSTALL[@]}" "torch" "accelerate" "peft" "safetensors" "datasets"
+"${PIP_INSTALL[@]}" "torch" "accelerate" "peft" "safetensors" "datasets" "jinja2"
 if ! "${PIP_INSTALL[@]}" "transformers==$TRANSFORMERS_VERSION"; then
   if [[ "$TRANSFORMERS_VERSION" == "5.3.0" ]]; then
     echo "WARNING: transformers==5.3.0 is unavailable; falling back to transformers==4.53.0 from the released model config." >&2
