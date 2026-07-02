@@ -194,11 +194,41 @@ LORA_R=16
 LORA_ALPHA=32
 SAMPLE_LIMIT=0
 COMPLIANCE_CHECK=1
+ATTN_IMPL=auto
 ```
 
 Use `SAMPLE_LIMIT` only for smoke tests. Keep it `0` for full-data training.
 
 Official offline-training guidance says to use Transformers `v5.3.0`. If that exact package is unavailable in the current Python index, `run_baseline.sh` falls back to `4.53.0`, which matches the released model config.
+
+## Attention Implementation
+
+Default:
+
+```bash
+ATTN_IMPL=auto
+```
+
+`auto` uses PyTorch `sdpa` on CUDA and the Transformers default on non-CUDA machines. This avoids making `flash-attn` a hard dependency while still avoiding plain eager attention on A100/CUDA runs.
+
+Supported values:
+
+```bash
+ATTN_IMPL=auto
+ATTN_IMPL=sdpa
+ATTN_IMPL=flash_attention_2
+ATTN_IMPL=eager
+ATTN_IMPL=default
+```
+
+Use `flash_attention_2` only if `flash-attn` is already installed and compatible with the current CUDA/PyTorch stack:
+
+```bash
+ATTN_IMPL=flash_attention_2 PROFILE=a100-40g \
+bash llm-rec-baseline/scripts/run_baseline.sh ./runs/a100-flash
+```
+
+Use `eager` only for debugging. Long-context A100 training should use `sdpa` or `flash_attention_2`.
 
 ## Competition Compliance
 

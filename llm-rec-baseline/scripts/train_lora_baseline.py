@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import importlib.util
 import json
 from pathlib import Path
 
@@ -13,6 +14,25 @@ from transformers import (
     Trainer,
     TrainingArguments,
 )
+
+
+def resolve_attention_impl(requested: str) -> tuple[str | None, str]:
+    if requested == "auto":
+        if torch.cuda.is_available():
+            return "sdpa", "auto selected PyTorch SDPA for CUDA"
+        return None, "auto selected Transformers default for non-CUDA"
+    if requested == "default":
+        return None, "using Transformers default attention implementation"
+    if requested == "flash_attention_2":
+        if importlib.util.find_spec("flash_attn") is None:
+            raise RuntimeError(
+                "ATTN_IMPL=flash_attention_2 requires the flash-attn package. "
+                "Install it in the run environment or use ATTN_IMPL=sdpa."
+            )
+        return "flash_attention_2", "using flash_attention_2"
+    if requested in {"sdpa", "eager"}:
+        return requested, f"using {requested}"
+    raise ValueError(f"Unsupported attention implementation: {requested}")
 
 
 class SftJsonlDataset(Dataset):
@@ -88,6 +108,7 @@ def main() -> None:
     parser.add_argument("--save-steps", type=int, default=500)
     parser.add_argument("--logging-steps", type=int, default=10)
     parser.add_argument("--adapter-base-model-name", default="OpenOneRec/OneReason-0.8B-pretrain-competition")
+    parser.add_argument("--attn-impl", default="auto", choices=["auto", "default", "sdpa", "flash_attention_2", "eager"])
     parser.add_argument("--trust-remote-code", action="store_true")
     args = parser.parse_args()
 
@@ -96,12 +117,23 @@ def main() -> None:
         tokenizer.pad_token = tokenizer.eos_token
 
     dtype = torch.bfloat16 if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else torch.float16
-    model = AutoModelForCausalLM.from_pretrained(
-        args.model_id,
-        torch_dtype=dtype if torch.cuda.is_available() else torch.float32,
-        device_map="auto" if torch.cuda.is_available() else None,
-        trust_remote_code=args.trust_remote_code,
-    )
+    attn_impl, attn_note = resolve_attention_impl(args.attn_impl)
+    model_kwargs = {
+        "torch_dtype": dtype if torch.cuda.is_available() else torch.float32,
+        "device_map": "auto" if torch.cuda.is_available() else None,
+        "trust_remote_code": args.trust_remote_code,
+    }
+    if attn_impl is not None:
+        model_kwargs["attn_implementation"] = attn_impl
+    print(json.dumps({
+        "attention": {
+            "requested": args.attn_impl,
+            "resolved": attn_impl or "default",
+            "note": attn_note,
+            "cuda": torch.cuda.is_available(),
+        }
+    }, ensure_ascii=False))
+    model = AutoModelForCausalLM.from_pretrained(args.model_id, **model_kwargs)
     model.config.use_cache = False
 
     lora_config = LoraConfig(
@@ -156,6 +188,7 @@ def main() -> None:
         "output_dir": str(args.output_dir),
         "upload_files": ["adapter_model.safetensors", "adapter_config.json"],
         "rows": len(dataset),
+        "attn_implementation": attn_impl or "default",
     }, ensure_ascii=False, indent=2))
 
 

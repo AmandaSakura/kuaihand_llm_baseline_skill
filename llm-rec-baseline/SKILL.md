@@ -90,6 +90,7 @@ FORCE_DATA=0
 RECREATE_ENV=0
 HF_HOME=~/.cache/huggingface
 COMPLIANCE_CHECK=1
+ATTN_IMPL=auto
 ```
 
 Use `SAMPLE_LIMIT` for smoke tests only. Keep it `0` for full-data training.
@@ -101,6 +102,8 @@ Use `SAMPLE_LIMIT` for smoke tests only. Keep it `0` for full-data training.
 `HF_HOME` defaults to the global Hugging Face cache so repeated runs do not redownload the base model. Existing run environments and prepared data are reused unless `RECREATE_ENV=1` or `FORCE_DATA=1` is set.
 
 `COMPLIANCE_CHECK=1` runs `scripts/check_competition_compliance.py`. It rejects local or remote base models whose `config.json` differs from the official OneReason-0.8B competition baseline on architecture, layer count, hidden size, vocab size, attention heads, context length, and token IDs.
+
+`ATTN_IMPL=auto` resolves to PyTorch `sdpa` on CUDA and the Transformers default elsewhere. Use `ATTN_IMPL=flash_attention_2` only when `flash-attn` is already installed and compatible with the current CUDA/PyTorch stack. Use `ATTN_IMPL=eager` only for debugging, not long-sequence A100 training.
 
 Official offline-training guidance says to use Transformers `v5.3.0`. If that exact package is unavailable in the current Python index, `run_baseline.sh` falls back to `4.53.0`, which matches the released model config, and prints a warning.
 

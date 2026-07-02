@@ -69,13 +69,14 @@ LORA_R="${LORA_R:-16}"
 LORA_ALPHA="${LORA_ALPHA:-32}"
 SAMPLE_LIMIT="${SAMPLE_LIMIT:-0}"
 COMPLIANCE_CHECK="${COMPLIANCE_CHECK:-1}"
+ATTN_IMPL="${ATTN_IMPL:-auto}"
 
 echo "Training profile: ${RESOLVED_PROFILE:-custom}"
 echo "Environment manager: $ENV_MANAGER_RESOLVED ($VENV_DIR)"
 echo "Package source: ${SELECTED_PYPI_SOURCE:-existing-env-or-default} ${PIP_INDEX_URL:-}"
 echo "Hugging Face source: ${SELECTED_HF_SOURCE:-default/cache} ${HF_ENDPOINT:-https://huggingface.co}"
 echo "HF cache: $HF_HOME"
-echo "LoRA params: MAX_LENGTH=$MAX_LENGTH BATCH_SIZE=$BATCH_SIZE GRAD_ACCUM=$GRAD_ACCUM LR=$LR LORA_R=$LORA_R LORA_ALPHA=$LORA_ALPHA SAMPLE_LIMIT=$SAMPLE_LIMIT"
+echo "LoRA params: MAX_LENGTH=$MAX_LENGTH BATCH_SIZE=$BATCH_SIZE GRAD_ACCUM=$GRAD_ACCUM LR=$LR LORA_R=$LORA_R LORA_ALPHA=$LORA_ALPHA SAMPLE_LIMIT=$SAMPLE_LIMIT ATTN_IMPL=$ATTN_IMPL"
 
 PREPARE_ARGS=(python "$SKILL_DIR/scripts/prepare_data.py" --output-dir "$DATA_DIR")
 if [[ "$FORCE_DATA" == "1" ]]; then
@@ -99,6 +100,7 @@ python "$SKILL_DIR/scripts/train_lora_baseline.py" \
   --lora-r "$LORA_R" \
   --lora-alpha "$LORA_ALPHA" \
   --adapter-base-model-name "OpenOneRec/OneReason-0.8B-pretrain-competition" \
+  --attn-impl "$ATTN_IMPL" \
   --sample-limit "$SAMPLE_LIMIT"
 
 python "$SKILL_DIR/scripts/validate_upload.py" \
