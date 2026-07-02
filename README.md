@@ -10,6 +10,7 @@ This repository is intended for both humans and AI coding agents. It contains:
 - `llm-rec-baseline/scripts/train_lora_baseline.py`: train a PEFT LoRA adapter.
 - `llm-rec-baseline/scripts/validate_upload.py`: validate Wanqing upload artifacts.
 - `llm-rec-baseline/scripts/detect_profile.py`: choose conservative LoRA defaults from hardware.
+- `llm-rec-baseline/scripts/check_competition_compliance.py`: reject model configs that do not match the official OneReason-0.8B competition baseline.
 - `llm-rec-baseline/scripts/select_sources.py`: probe PyPI/Hugging Face sources and choose reachable endpoints.
 - `data/dataset.tar.gz`: official SFT JSONL data (`懂推荐`, `懂物料`, `懂用户`), stored outside the skill folder.
 
@@ -67,7 +68,7 @@ The script will:
 5. Load `OpenOneRec/OneReason-0.8B-pretrain-competition` from the Hugging Face cache or selected endpoint.
 6. Detect hardware and set conservative LoRA defaults.
 7. Train a LoRA SFT adapter.
-8. Validate the upload files.
+8. Validate upload files and competition config compatibility.
 
 ## Environment Manager
 
@@ -192,11 +193,41 @@ LR=2e-4
 LORA_R=16
 LORA_ALPHA=32
 SAMPLE_LIMIT=0
+COMPLIANCE_CHECK=1
 ```
 
 Use `SAMPLE_LIMIT` only for smoke tests. Keep it `0` for full-data training.
 
 Official offline-training guidance says to use Transformers `v5.3.0`. If that exact package is unavailable in the current Python index, `run_baseline.sh` falls back to `4.53.0`, which matches the released model config.
+
+## Competition Compliance
+
+The official guide states that the preliminary round only allows iteration from `OneReason-0.8B`, that evaluation strictly checks the baseline model config, and that contestants may not modify model structure, predefined model parameters, or evaluation settings.
+
+This repository keeps the baseline on the safe path:
+
+- It loads `OpenOneRec/OneReason-0.8B-pretrain-competition` by default.
+- It does not add special tokens or resize embeddings.
+- It does not change tokenizer, vocab, model config, or architecture.
+- It trains a PEFT LoRA adapter by default.
+- It writes `adapter_config.json` with the official base model name.
+- It validates the base config before training and validates adapter config after training.
+
+Manual check:
+
+```bash
+python llm-rec-baseline/scripts/check_competition_compliance.py \
+  --model-id OpenOneRec/OneReason-0.8B-pretrain-competition
+```
+
+For a local model mirror:
+
+```bash
+python llm-rec-baseline/scripts/check_competition_compliance.py \
+  --model-id /path/to/OneReason-0.8B-pretrain-competition
+```
+
+Do not use this baseline skill for architecture changes such as changing layer count, hidden size, attention heads, vocab size, context config, tokenizer, special tokens, model class, or custom merged model structures unless the competition rules explicitly allow it.
 
 ## Output And Upload
 
@@ -278,4 +309,5 @@ When using this repository autonomously:
 3. Use `SAMPLE_LIMIT=32` for smoke tests before full training.
 4. Do not modify tokenizer, vocab, special tokens, or base model config.
 5. Prefer LoRA unless the user explicitly asks for full-parameter training.
-6. After training, run `llm-rec-baseline/scripts/validate_upload.py` and report the exact upload files.
+6. Keep `COMPLIANCE_CHECK=1` unless the user explicitly asks to experiment outside competition-upload constraints.
+7. After training, run `llm-rec-baseline/scripts/validate_upload.py` and report the exact upload files.

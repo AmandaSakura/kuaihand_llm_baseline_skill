@@ -31,6 +31,8 @@ adapter_config.json
 
 Do not alter base model architecture, config, tokenizer, vocabulary, or special tokens. The competition evaluation checks compatibility with the baseline model config.
 
+The official guide says the preliminary round only allows iteration from `OneReason-0.8B`; evaluation strictly checks the config, and contestants may not modify model structure, predefined model parameters, or evaluation settings. Keep this skill in LoRA/full-parameter fine-tuning territory only.
+
 ## Workflow
 
 1. Prepare a run directory.
@@ -66,6 +68,7 @@ Use `scripts/run_baseline.sh` for the standard end-to-end path. It:
 5. Detects available training hardware and fills conservative LoRA defaults.
 6. Runs LoRA SFT.
 7. Validates the resulting upload files.
+8. Checks competition config compatibility before training and after adapter creation.
 
 Useful environment overrides:
 
@@ -86,6 +89,7 @@ SAMPLE_LIMIT=0
 FORCE_DATA=0
 RECREATE_ENV=0
 HF_HOME=~/.cache/huggingface
+COMPLIANCE_CHECK=1
 ```
 
 Use `SAMPLE_LIMIT` for smoke tests only. Keep it `0` for full-data training.
@@ -95,6 +99,8 @@ Use `SAMPLE_LIMIT` for smoke tests only. Keep it `0` for full-data training.
 `SOURCE_AUTO_DETECT=1` probes PyPI and Hugging Face endpoints with a short timeout, then exports `PIP_INDEX_URL`, `UV_INDEX_URL`, and `HF_ENDPOINT` for the selected reachable sources. Set `SOURCE_AUTO_DETECT=0` to use the current shell or tool defaults.
 
 `HF_HOME` defaults to the global Hugging Face cache so repeated runs do not redownload the base model. Existing run environments and prepared data are reused unless `RECREATE_ENV=1` or `FORCE_DATA=1` is set.
+
+`COMPLIANCE_CHECK=1` runs `scripts/check_competition_compliance.py`. It rejects local or remote base models whose `config.json` differs from the official OneReason-0.8B competition baseline on architecture, layer count, hidden size, vocab size, attention heads, context length, and token IDs.
 
 Official offline-training guidance says to use Transformers `v5.3.0`. If that exact package is unavailable in the current Python index, `run_baseline.sh` falls back to `4.53.0`, which matches the released model config, and prints a warning.
 

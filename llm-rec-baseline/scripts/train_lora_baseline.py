@@ -87,6 +87,7 @@ def main() -> None:
     parser.add_argument("--sample-limit", type=int, default=0)
     parser.add_argument("--save-steps", type=int, default=500)
     parser.add_argument("--logging-steps", type=int, default=10)
+    parser.add_argument("--adapter-base-model-name", default="OpenOneRec/OneReason-0.8B-pretrain-competition")
     parser.add_argument("--trust-remote-code", action="store_true")
     args = parser.parse_args()
 
@@ -145,6 +146,11 @@ def main() -> None:
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
     model.save_pretrained(args.output_dir, safe_serialization=True)
+    adapter_config_path = args.output_dir / "adapter_config.json"
+    if adapter_config_path.exists():
+        adapter_config = json.loads(adapter_config_path.read_text(encoding="utf-8"))
+        adapter_config["base_model_name_or_path"] = args.adapter_base_model_name
+        adapter_config_path.write_text(json.dumps(adapter_config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     tokenizer.save_pretrained(args.output_dir)
     print(json.dumps({
         "output_dir": str(args.output_dir),

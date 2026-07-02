@@ -68,6 +68,7 @@ LR="${LR:-2e-4}"
 LORA_R="${LORA_R:-16}"
 LORA_ALPHA="${LORA_ALPHA:-32}"
 SAMPLE_LIMIT="${SAMPLE_LIMIT:-0}"
+COMPLIANCE_CHECK="${COMPLIANCE_CHECK:-1}"
 
 echo "Training profile: ${RESOLVED_PROFILE:-custom}"
 echo "Environment manager: $ENV_MANAGER_RESOLVED ($VENV_DIR)"
@@ -82,6 +83,10 @@ if [[ "$FORCE_DATA" == "1" ]]; then
 fi
 "${PREPARE_ARGS[@]}"
 
+if [[ "$COMPLIANCE_CHECK" == "1" ]]; then
+  python "$SKILL_DIR/scripts/check_competition_compliance.py" --model-id "$MODEL_ID"
+fi
+
 python "$SKILL_DIR/scripts/train_lora_baseline.py" \
   --model-id "$MODEL_ID" \
   --train-file "$DATA_DIR/train_all.jsonl" \
@@ -93,10 +98,17 @@ python "$SKILL_DIR/scripts/train_lora_baseline.py" \
   --lr "$LR" \
   --lora-r "$LORA_R" \
   --lora-alpha "$LORA_ALPHA" \
+  --adapter-base-model-name "OpenOneRec/OneReason-0.8B-pretrain-competition" \
   --sample-limit "$SAMPLE_LIMIT"
 
 python "$SKILL_DIR/scripts/validate_upload.py" \
   --method lora \
   --model-dir "$OUTPUT_DIR"
+
+if [[ "$COMPLIANCE_CHECK" == "1" ]]; then
+  python "$SKILL_DIR/scripts/check_competition_compliance.py" \
+    --model-id "$MODEL_ID" \
+    --adapter-dir "$OUTPUT_DIR"
+fi
 
 echo "Upload-ready LoRA files are in: $OUTPUT_DIR"
