@@ -101,6 +101,8 @@ Use `SAMPLE_LIMIT` for smoke tests only. Keep it `0` for full-data training.
 
 `HF_HOME` defaults to the global Hugging Face cache so repeated runs do not redownload the base model. Existing run environments and prepared data are reused unless `RECREATE_ENV=1` or `FORCE_DATA=1` is set.
 
+Use `OFFLINE=1 MODEL_ID=/path/to/local/model` on machines that cannot access Hugging Face. The runner disables HF network access and requires a local model directory. It also defaults `HF_HUB_DISABLE_XET=1` to avoid Xet download stalls on restricted networks.
+
 `COMPLIANCE_CHECK=1` runs `scripts/check_competition_compliance.py`. It rejects local or remote base models whose `config.json` differs from the official OneReason-0.8B competition baseline on architecture, layer count, hidden size, vocab size, attention heads, context length, and token IDs.
 
 `ATTN_IMPL=auto` resolves to PyTorch `sdpa` on CUDA and the Transformers default elsewhere. Use `ATTN_IMPL=flash_attention_2` only when `flash-attn` is already installed and compatible with the current CUDA/PyTorch stack. Use `ATTN_IMPL=eager` only for debugging, not long-sequence A100 training.
@@ -141,6 +143,8 @@ For Wanqing, upload only the validated LoRA files from the output directory:
 adapter_model.safetensors
 adapter_config.json
 ```
+
+`run_baseline.sh` copies those two files into a clean `<run-dir>/upload/lora-baseline/` directory. Use that directory for drag-and-drop upload; do not drag the full training output directory because it can contain tokenizer files or checkpoints.
 
 In the Wanqing UI, choose the training method as LoRA. Use a short model name and version such as `llm-rec-lora-baseline` / `V1`.
 

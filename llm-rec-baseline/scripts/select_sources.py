@@ -34,14 +34,15 @@ def probe(url: str, timeout: float) -> tuple[bool, float, str]:
 
 
 def choose(kind: str, timeout: float, preferred: str | None) -> dict:
-    if preferred:
-        sources = [("env", preferred)]
-    elif kind == "pypi":
-        sources = PYPI_SOURCES
-    elif kind == "hf":
-        sources = HF_SOURCES
-    else:
+    fallback_sources = PYPI_SOURCES if kind == "pypi" else HF_SOURCES if kind == "hf" else None
+    if fallback_sources is None:
         raise ValueError(kind)
+
+    if preferred:
+        normalized = preferred.rstrip("/")
+        sources = [("env", normalized)] + [(name, url) for name, url in fallback_sources if url.rstrip("/") != normalized]
+    else:
+        sources = fallback_sources
 
     results = []
     for name, url in sources:

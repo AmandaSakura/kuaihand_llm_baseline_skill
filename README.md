@@ -151,6 +151,15 @@ Force recreation:
 RECREATE_ENV=1 FORCE_DATA=1 bash llm-rec-baseline/scripts/run_baseline.sh ./runs/baseline
 ```
 
+Set `OFFLINE=1` when the machine cannot access Hugging Face at all. In that mode `MODEL_ID` must be a local model directory and the runner sets `HF_HUB_OFFLINE=1` / `TRANSFORMERS_OFFLINE=1`.
+
+```bash
+OFFLINE=1 MODEL_ID=/path/to/OneReason-0.8B-pretrain-competition \
+bash llm-rec-baseline/scripts/run_baseline.sh ./runs/offline
+```
+
+By default `HF_HUB_DISABLE_XET=1` is exported to avoid fragile Xet-backed downloads on restricted networks.
+
 ## Hardware Profiles
 
 Default:
@@ -268,7 +277,13 @@ The default output directory is:
 <run-dir>/output/lora-baseline
 ```
 
-For Wanqing LoRA upload, use only:
+The clean upload directory is:
+
+```text
+<run-dir>/upload/lora-baseline
+```
+
+For Wanqing LoRA upload, use only the clean upload directory, which contains:
 
 ```text
 adapter_model.safetensors

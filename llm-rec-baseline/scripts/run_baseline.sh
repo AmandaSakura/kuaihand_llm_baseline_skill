@@ -5,6 +5,7 @@ RUN_DIR="${1:-$PWD/llm-rec-baseline-run}"
 SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DATA_DIR="$RUN_DIR/data"
 OUTPUT_DIR="$RUN_DIR/output/lora-baseline"
+UPLOAD_DIR="$RUN_DIR/upload/lora-baseline"
 VENV_DIR="$RUN_DIR/.venv"
 
 MODEL_ID="${MODEL_ID:-OpenOneRec/OneReason-0.8B-pretrain-competition}"
@@ -15,12 +16,28 @@ SOURCE_AUTO_DETECT="${SOURCE_AUTO_DETECT:-1}"
 RECREATE_ENV="${RECREATE_ENV:-0}"
 FORCE_DATA="${FORCE_DATA:-0}"
 HF_HOME="${HF_HOME:-$HOME/.cache/huggingface}"
-export HF_HOME
+HF_HUB_DISABLE_XET="${HF_HUB_DISABLE_XET:-1}"
+OFFLINE="${OFFLINE:-0}"
+INSTALL_DEPS="${INSTALL_DEPS:-auto}"
+export HF_HOME HF_HUB_DISABLE_XET
 
 mkdir -p "$RUN_DIR"
 
+if [[ "$OFFLINE" == "1" ]]; then
+  if [[ ! -d "$MODEL_ID" ]]; then
+    echo "ERROR: OFFLINE=1 requires MODEL_ID to be a local model directory; got $MODEL_ID" >&2
+    exit 1
+  fi
+  export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
+  SOURCE_AUTO_DETECT=0
+fi
+
 if [[ "$SOURCE_AUTO_DETECT" == "1" ]]; then
   eval "$(python3 "$SKILL_DIR/scripts/select_sources.py" --format shell)"
+fi
+
+if [[ "$RECREATE_ENV" == "1" ]]; then
+  rm -rf "$VENV_DIR"
 fi
 
 if [[ -x "$VENV_DIR/bin/python" && "$RECREATE_ENV" != "1" ]]; then
@@ -45,14 +62,52 @@ fi
 
 source "$VENV_DIR/bin/activate"
 
-"${PIP_INSTALL[@]}" --upgrade pip
-"${PIP_INSTALL[@]}" "torch" "accelerate" "peft" "safetensors" "datasets" "jinja2"
-if ! "${PIP_INSTALL[@]}" "transformers==$TRANSFORMERS_VERSION"; then
-  if [[ "$TRANSFORMERS_VERSION" == "5.3.0" ]]; then
-    echo "WARNING: transformers==5.3.0 is unavailable; falling back to transformers==4.53.0 from the released model config." >&2
-    "${PIP_INSTALL[@]}" "transformers==4.53.0"
-  else
-    exit 1
+python - <<'PY'
+import sys
+if sys.version_info < (3, 10):
+    raise SystemExit(f"Python >= 3.10 is required, got {sys.version.split()[0]}")
+PY
+
+DEPS_READY=0
+if [[ "$INSTALL_DEPS" == "auto" || "$INSTALL_DEPS" == "0" ]]; then
+  if python - "$TRANSFORMERS_VERSION" <<'PY'
+import importlib.util
+import sys
+required = ["torch", "accelerate", "peft", "safetensors", "datasets", "jinja2", "transformers"]
+missing = [name for name in required if importlib.util.find_spec(name) is None]
+if missing:
+    print("missing deps:", ",".join(missing))
+    raise SystemExit(1)
+import transformers
+want = sys.argv[1]
+allowed = {want}
+if want == "5.3.0":
+    allowed.add("4.53.0")
+if transformers.__version__ not in allowed:
+    print(f"transformers version mismatch: have {transformers.__version__}, want {want}")
+    raise SystemExit(1)
+print("dependencies already available")
+PY
+  then
+    DEPS_READY=1
+  fi
+fi
+
+if [[ "$INSTALL_DEPS" == "0" && "$DEPS_READY" != "1" ]]; then
+  echo "ERROR: INSTALL_DEPS=0 but required Python packages are missing or incompatible." >&2
+  exit 1
+fi
+
+if [[ "$DEPS_READY" != "1" ]]; then
+  "${PIP_INSTALL[@]}" --upgrade pip
+  "${PIP_INSTALL[@]}" "torch" "accelerate" "peft" "safetensors" "datasets" "jinja2"
+  if ! "${PIP_INSTALL[@]}" "transformers==$TRANSFORMERS_VERSION"; then
+    if [[ "$TRANSFORMERS_VERSION" == "5.3.0" ]]; then
+      echo "WARNING: transformers==5.3.0 is unavailable; falling back to transformers==4.53.0 from the released model config." >&2
+      "${PIP_INSTALL[@]}" "transformers==4.53.0"
+    else
+      exit 1
+    fi
   fi
 fi
 
@@ -76,6 +131,7 @@ echo "Environment manager: $ENV_MANAGER_RESOLVED ($VENV_DIR)"
 echo "Package source: ${SELECTED_PYPI_SOURCE:-existing-env-or-default} ${PIP_INDEX_URL:-}"
 echo "Hugging Face source: ${SELECTED_HF_SOURCE:-default/cache} ${HF_ENDPOINT:-https://huggingface.co}"
 echo "HF cache: $HF_HOME"
+echo "HF xet disabled: $HF_HUB_DISABLE_XET; offline: $OFFLINE"
 echo "LoRA params: MAX_LENGTH=$MAX_LENGTH BATCH_SIZE=$BATCH_SIZE GRAD_ACCUM=$GRAD_ACCUM LR=$LR LORA_R=$LORA_R LORA_ALPHA=$LORA_ALPHA SAMPLE_LIMIT=$SAMPLE_LIMIT ATTN_IMPL=$ATTN_IMPL"
 
 PREPARE_ARGS=(python "$SKILL_DIR/scripts/prepare_data.py" --output-dir "$DATA_DIR")
@@ -103,14 +159,20 @@ python "$SKILL_DIR/scripts/train_lora_baseline.py" \
   --attn-impl "$ATTN_IMPL" \
   --sample-limit "$SAMPLE_LIMIT"
 
+rm -rf "$UPLOAD_DIR"
+mkdir -p "$UPLOAD_DIR"
+cp "$OUTPUT_DIR/adapter_model.safetensors" "$UPLOAD_DIR/adapter_model.safetensors"
+cp "$OUTPUT_DIR/adapter_config.json" "$UPLOAD_DIR/adapter_config.json"
+
 python "$SKILL_DIR/scripts/validate_upload.py" \
   --method lora \
-  --model-dir "$OUTPUT_DIR"
+  --model-dir "$UPLOAD_DIR"
 
 if [[ "$COMPLIANCE_CHECK" == "1" ]]; then
   python "$SKILL_DIR/scripts/check_competition_compliance.py" \
     --model-id "$MODEL_ID" \
-    --adapter-dir "$OUTPUT_DIR"
+    --adapter-dir "$UPLOAD_DIR"
 fi
 
-echo "Upload-ready LoRA files are in: $OUTPUT_DIR"
+echo "Training output is in: $OUTPUT_DIR"
+echo "Upload-ready LoRA files are in: $UPLOAD_DIR"

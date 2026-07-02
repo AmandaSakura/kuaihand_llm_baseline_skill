@@ -63,6 +63,41 @@ def resolve_attention_impl(requested: str) -> tuple[str | None, str]:
     raise ValueError(f"Unsupported attention implementation: {requested}")
 
 
+def build_sft_features(tokenizer, rec: dict, max_length: int) -> dict:
+    messages = []
+    if rec.get("system"):
+        messages.append({"role": "system", "content": rec["system"]})
+    messages.append({"role": "user", "content": rec["prompt"]})
+    prompt_text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+    full_text = tokenizer.apply_chat_template(
+        messages + [{"role": "assistant", "content": rec["response"]}],
+        tokenize=False,
+        add_generation_prompt=False,
+    )
+    prompt_ids = tokenizer(prompt_text, add_special_tokens=False)["input_ids"]
+    full_ids = tokenizer(full_text, add_special_tokens=False)["input_ids"]
+    response_ids = full_ids[len(prompt_ids):]
+    if not response_ids:
+        response_ids = tokenizer(rec["response"], add_special_tokens=False)["input_ids"]
+
+    if len(prompt_ids) + len(response_ids) <= max_length:
+        kept_prompt = prompt_ids
+        kept_response = response_ids
+    else:
+        kept_response = response_ids[:max_length]
+        prompt_budget = max(0, max_length - len(kept_response))
+        kept_prompt = prompt_ids[-prompt_budget:] if prompt_budget else []
+
+    input_ids = kept_prompt + kept_response
+    labels = [-100] * len(kept_prompt) + kept_response
+    return {
+        "input_ids": input_ids,
+        "attention_mask": [1] * len(input_ids),
+        "labels": labels,
+        "target_tokens": len(kept_response),
+    }
+
+
 def load_rows(data_dir: Path, eval_fraction: float, seed: int, max_examples: int) -> list[dict]:
     rows = []
     for file_name in EXPECTED_FILES:
@@ -100,30 +135,9 @@ class EvalDataset(Dataset):
 
     def __getitem__(self, index):
         rec = self.rows[index]
-        messages = []
-        if rec.get("system"):
-            messages.append({"role": "system", "content": rec["system"]})
-        messages.append({"role": "user", "content": rec["prompt"]})
-        prompt_text = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-        full_text = self.tokenizer.apply_chat_template(
-            messages + [{"role": "assistant", "content": rec["response"]}],
-            tokenize=False,
-            add_generation_prompt=False,
-        )
-        prompt_ids = self.tokenizer(prompt_text, add_special_tokens=False)["input_ids"]
-        full = self.tokenizer(full_text, add_special_tokens=False, truncation=True, max_length=self.max_length)
-        input_ids = full["input_ids"]
-        prompt_len = min(len(prompt_ids), len(input_ids))
-        labels = [-100] * prompt_len + input_ids[prompt_len:]
-        target_tokens = sum(1 for x in labels if x != -100)
-        return {
-            "input_ids": input_ids,
-            "attention_mask": full["attention_mask"],
-            "labels": labels,
-            "target_tokens": target_tokens,
-            "task": rec["task"],
-            "file": rec["file"],
-        }
+        features = build_sft_features(self.tokenizer, rec, self.max_length)
+        features.update({"task": rec["task"], "file": rec["file"]})
+        return features
 
 
 def collate_with_meta(tokenizer):
