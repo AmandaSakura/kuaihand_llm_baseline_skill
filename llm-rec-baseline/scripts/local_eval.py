@@ -279,7 +279,11 @@ def main() -> None:
     generation = generation_eval(model, tokenizer, rows, args, device) if args.generation_samples else None
 
     report = {
-        "warning": "Proxy local evaluation only. It is not the official OneRec Benchmark score.",
+        "warning": (
+            "Custom proxy local evaluation only. It is not the official OneRec Benchmark score, "
+            "has not been calibrated against platform results, and may be anti-correlated with "
+            "the hidden benchmark until validated with real submissions."
+        ),
         "model_id": args.model_id,
         "adapter_dir": str(args.adapter_dir) if args.adapter_dir else None,
         "data_dir": str(args.data_dir),

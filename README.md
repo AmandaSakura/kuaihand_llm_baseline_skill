@@ -301,7 +301,16 @@ Do not upload optimizer checkpoints, trainer state, tokenizer files, logs, or in
 
 ## Optional Local Proxy Eval
 
-Official scores are black-box platform results. Local eval in this repository is only a proxy to filter obviously bad runs when you have many candidate adapters.
+Official scores are black-box platform results. Local eval in this repository is a custom proxy script, not an official metric. It has not been calibrated against platform submissions yet and may even become anti-correlated with the hidden benchmark until you compare it with real online scores.
+
+Use it mainly to reject obviously broken runs:
+
+- loss is NaN or much worse than baseline
+- generation is empty, repetitive, or malformed
+- semantic-ID token format collapses
+- one task bucket is obviously broken
+
+Do not use small proxy differences as proof that one adapter will score higher online.
 
 After training:
 
@@ -324,7 +333,15 @@ It reports:
 - optional greedy generation previews
 - semantic-ID token format rate on generated samples
 
-Use this to decide which candidates are worth one of the daily official submissions. Do not treat it as leaderboard score.
+Recommended calibration loop:
+
+1. Train and submit one plain baseline to get an online score anchor.
+2. Run `local_eval.py` on the same adapter and save `local_eval.json`.
+3. After each online submission, record both platform scores and local proxy metrics.
+4. Only after several submissions, decide which local proxy signals are useful.
+5. Update this script or your selection rule based on observed platform correlation.
+
+Until that calibration exists, use local eval as a sanity gate, not as a ranker.
 
 ## Validate Upload Files Manually
 

@@ -109,7 +109,7 @@ Use `OFFLINE=1 MODEL_ID=/path/to/local/model` on machines that cannot access Hug
 
 ## Optional Local Proxy Eval
 
-Do not present local eval as official scoring. Use it only to filter candidate adapters before spending daily black-box submissions.
+Do not present local eval as official scoring. It is a custom proxy script, has not been calibrated against platform results, and may be anti-correlated with the hidden benchmark until validated with real submissions. Use it only to filter clearly broken candidate adapters before spending daily black-box submissions.
 
 ```bash
 python /Users/joker/.codex/skills/llm-rec-baseline/scripts/local_eval.py \
@@ -121,7 +121,7 @@ python /Users/joker/.codex/skills/llm-rec-baseline/scripts/local_eval.py \
   --generation-samples 16
 ```
 
-The script reports proxy validation loss/perplexity by task and file, plus optional semantic-ID format checks on generated samples.
+The script reports proxy validation loss/perplexity by task and file, plus optional semantic-ID format checks on generated samples. After the first real training + platform submission, compare local metrics with the online scores and adjust this script or the candidate-selection rule accordingly.
 
 Official offline-training guidance says to use Transformers `v5.3.0`. If that exact package is unavailable in the current Python index, `run_baseline.sh` falls back to `4.53.0`, which matches the released model config, and prints a warning.
 
