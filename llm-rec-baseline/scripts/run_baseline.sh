@@ -11,10 +11,22 @@ MODEL_ID="${MODEL_ID:-OpenOneRec/OneReason-0.8B-pretrain-competition}"
 TRANSFORMERS_VERSION="${TRANSFORMERS_VERSION:-5.3.0}"
 PROFILE="${PROFILE:-auto}"
 ENV_MANAGER="${ENV_MANAGER:-auto}"
+SOURCE_AUTO_DETECT="${SOURCE_AUTO_DETECT:-1}"
+RECREATE_ENV="${RECREATE_ENV:-0}"
+FORCE_DATA="${FORCE_DATA:-0}"
+HF_HOME="${HF_HOME:-$HOME/.cache/huggingface}"
+export HF_HOME
 
 mkdir -p "$RUN_DIR"
 
-if [[ "$ENV_MANAGER" == "uv" ]] || { [[ "$ENV_MANAGER" == "auto" ]] && command -v uv >/dev/null 2>&1; }; then
+if [[ "$SOURCE_AUTO_DETECT" == "1" ]]; then
+  eval "$(python3 "$SKILL_DIR/scripts/select_sources.py" --format shell)"
+fi
+
+if [[ -x "$VENV_DIR/bin/python" && "$RECREATE_ENV" != "1" ]]; then
+  ENV_MANAGER_RESOLVED="existing"
+  PIP_INSTALL=("$VENV_DIR/bin/python" -m pip install)
+elif [[ "$ENV_MANAGER" == "uv" ]] || { [[ "$ENV_MANAGER" == "auto" ]] && command -v uv >/dev/null 2>&1; }; then
   if ! command -v uv >/dev/null 2>&1; then
     echo "ERROR: ENV_MANAGER=uv was requested, but uv was not found on PATH." >&2
     exit 1
@@ -59,11 +71,16 @@ SAMPLE_LIMIT="${SAMPLE_LIMIT:-0}"
 
 echo "Training profile: ${RESOLVED_PROFILE:-custom}"
 echo "Environment manager: $ENV_MANAGER_RESOLVED ($VENV_DIR)"
+echo "Package source: ${SELECTED_PYPI_SOURCE:-existing-env-or-default} ${PIP_INDEX_URL:-}"
+echo "Hugging Face source: ${SELECTED_HF_SOURCE:-default/cache} ${HF_ENDPOINT:-https://huggingface.co}"
+echo "HF cache: $HF_HOME"
 echo "LoRA params: MAX_LENGTH=$MAX_LENGTH BATCH_SIZE=$BATCH_SIZE GRAD_ACCUM=$GRAD_ACCUM LR=$LR LORA_R=$LORA_R LORA_ALPHA=$LORA_ALPHA SAMPLE_LIMIT=$SAMPLE_LIMIT"
 
-python "$SKILL_DIR/scripts/prepare_data.py" \
-  --output-dir "$DATA_DIR" \
-  --force
+PREPARE_ARGS=(python "$SKILL_DIR/scripts/prepare_data.py" --output-dir "$DATA_DIR")
+if [[ "$FORCE_DATA" == "1" ]]; then
+  PREPARE_ARGS+=(--force)
+fi
+"${PREPARE_ARGS[@]}"
 
 python "$SKILL_DIR/scripts/train_lora_baseline.py" \
   --model-id "$MODEL_ID" \

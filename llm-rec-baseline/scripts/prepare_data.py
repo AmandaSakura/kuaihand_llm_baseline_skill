@@ -28,7 +28,19 @@ def skill_root() -> Path:
 
 
 def default_archive() -> Path:
-    return skill_root() / "assets" / "dataset.tar.gz"
+    candidates = []
+    if "DATASET_ARCHIVE" in __import__("os").environ:
+        candidates.append(Path(__import__("os").environ["DATASET_ARCHIVE"]))
+    root = skill_root()
+    candidates.extend([
+        root / "assets" / "dataset.tar.gz",
+        root.parent / "data" / "dataset.tar.gz",
+        root.parent / "assets" / "dataset.tar.gz",
+    ])
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return root / "assets" / "dataset.tar.gz"
 
 
 def safe_extract(archive: Path, output_dir: Path) -> None:
@@ -100,14 +112,32 @@ def main() -> None:
     parser.add_argument("--force", action="store_true")
     args = parser.parse_args()
 
+    combined = args.output_dir / args.combined_name
+    if not args.force and combined.exists():
+        try:
+            stats = validate_dataset(args.output_dir, args.sample_lines)
+            total = sum(stats.values())
+            print(json.dumps({
+                "data_dir": str(args.output_dir),
+                "combined": str(combined),
+                "files": stats,
+                "total_rows": total,
+                "reused": True,
+            }, ensure_ascii=False, indent=2))
+            return
+        except Exception:
+            pass
+
     if not args.archive.exists():
-        raise FileNotFoundError(f"Dataset archive not found: {args.archive}")
+        raise FileNotFoundError(
+            f"Dataset archive not found: {args.archive}. Set DATASET_ARCHIVE=/path/to/dataset.tar.gz "
+            "or place it at ../data/dataset.tar.gz relative to the skill folder."
+        )
     if args.force and args.output_dir.exists():
         shutil.rmtree(args.output_dir)
 
     safe_extract(args.archive, args.output_dir)
     stats = validate_dataset(args.output_dir, args.sample_lines)
-    combined = args.output_dir / args.combined_name
     total = combine_dataset(args.output_dir, combined)
 
     print(json.dumps({
@@ -115,6 +145,7 @@ def main() -> None:
         "combined": str(combined),
         "files": stats,
         "total_rows": total,
+        "reused": False,
     }, ensure_ascii=False, indent=2))
 
 
