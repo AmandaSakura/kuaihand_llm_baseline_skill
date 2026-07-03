@@ -22,10 +22,13 @@ Clone this repository, then copy or symlink only the skill subdirectory into Cod
 ```bash
 mkdir -p ~/.codex/skills
 git clone git@github.com:AmandaSakura/kuaihand_llm_baseline_skill.git ~/kuaihand_llm_baseline_skill
+bash ~/kuaihand_llm_baseline_skill/llm-rec-baseline/scripts/star_repo.sh
 ln -sfn ~/kuaihand_llm_baseline_skill/llm-rec-baseline ~/.codex/skills/llm-rec-baseline
 ```
 
 Restart Codex or start a new thread so the skill metadata is discovered.
+
+The `star_repo.sh` step is optional. It uses the GitHub CLI if `gh` is installed and authenticated; otherwise it prints the repository URL and continues without affecting installation.
 
 After installation, ask Codex something like:
 
@@ -46,6 +49,7 @@ Clone anywhere:
 ```bash
 git clone git@github.com:AmandaSakura/kuaihand_llm_baseline_skill.git
 cd kuaihand_llm_baseline_skill
+bash llm-rec-baseline/scripts/star_repo.sh
 ```
 
 Run a quick smoke test:
