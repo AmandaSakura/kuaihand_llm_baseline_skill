@@ -11,6 +11,7 @@ VENV_DIR="$RUN_DIR/.venv"
 MODEL_ID="${MODEL_ID:-OpenOneRec/OneReason-0.8B-pretrain-competition}"
 TRANSFORMERS_VERSION="${TRANSFORMERS_VERSION:-5.3.0}"
 PROFILE="${PROFILE:-auto}"
+WANQING_UI_PRESET="${WANQING_UI_PRESET:-0}"
 ENV_MANAGER="${ENV_MANAGER:-auto}"
 SOURCE_AUTO_DETECT="${SOURCE_AUTO_DETECT:-1}"
 RECREATE_ENV="${RECREATE_ENV:-0}"
@@ -115,6 +116,24 @@ if [[ "$PROFILE" != "custom" ]]; then
   eval "$(python "$SKILL_DIR/scripts/detect_profile.py" --profile "$PROFILE" --format shell)"
 fi
 
+if [[ "$WANQING_UI_PRESET" == "1" ]]; then
+  EPOCHS="1"
+  LR="2e-4"
+  BATCH_SIZE="1"
+  MAX_LENGTH="32768"
+  WARMUP_RATIO="0.03"
+  LORA_R="16"
+  LORA_ALPHA="32"
+  LORA_DROPOUT="0.05"
+  LR_SCHEDULER_TYPE="cosine"
+  WEIGHT_DECAY="0.001"
+  SAVE_STEPS="256"
+  GRAD_ACCUM="4"
+  PRECISION="bf16"
+  ENABLE_THINKING="0"
+  echo "WARNING: WANQING_UI_PRESET=1 matches the managed-platform UI recommendation and may OOM on local GPUs." >&2
+fi
+
 EPOCHS="${EPOCHS:-1}"
 MAX_LENGTH="${MAX_LENGTH:-1024}"
 BATCH_SIZE="${BATCH_SIZE:-1}"
@@ -122,6 +141,13 @@ GRAD_ACCUM="${GRAD_ACCUM:-8}"
 LR="${LR:-2e-4}"
 LORA_R="${LORA_R:-16}"
 LORA_ALPHA="${LORA_ALPHA:-32}"
+LORA_DROPOUT="${LORA_DROPOUT:-0.05}"
+WARMUP_RATIO="${WARMUP_RATIO:-0.03}"
+LR_SCHEDULER_TYPE="${LR_SCHEDULER_TYPE:-cosine}"
+WEIGHT_DECAY="${WEIGHT_DECAY:-0.001}"
+SAVE_STEPS="${SAVE_STEPS:-256}"
+PRECISION="${PRECISION:-auto}"
+ENABLE_THINKING="${ENABLE_THINKING:-0}"
 SAMPLE_LIMIT="${SAMPLE_LIMIT:-0}"
 COMPLIANCE_CHECK="${COMPLIANCE_CHECK:-1}"
 ATTN_IMPL="${ATTN_IMPL:-auto}"
@@ -132,7 +158,7 @@ echo "Package source: ${SELECTED_PYPI_SOURCE:-existing-env-or-default} ${PIP_IND
 echo "Hugging Face source: ${SELECTED_HF_SOURCE:-default/cache} ${HF_ENDPOINT:-https://huggingface.co}"
 echo "HF cache: $HF_HOME"
 echo "HF xet disabled: $HF_HUB_DISABLE_XET; offline: $OFFLINE"
-echo "LoRA params: MAX_LENGTH=$MAX_LENGTH BATCH_SIZE=$BATCH_SIZE GRAD_ACCUM=$GRAD_ACCUM LR=$LR LORA_R=$LORA_R LORA_ALPHA=$LORA_ALPHA SAMPLE_LIMIT=$SAMPLE_LIMIT ATTN_IMPL=$ATTN_IMPL"
+echo "LoRA params: EPOCHS=$EPOCHS MAX_LENGTH=$MAX_LENGTH BATCH_SIZE=$BATCH_SIZE GRAD_ACCUM=$GRAD_ACCUM LR=$LR WARMUP_RATIO=$WARMUP_RATIO LR_SCHEDULER_TYPE=$LR_SCHEDULER_TYPE WEIGHT_DECAY=$WEIGHT_DECAY SAVE_STEPS=$SAVE_STEPS LORA_R=$LORA_R LORA_ALPHA=$LORA_ALPHA LORA_DROPOUT=$LORA_DROPOUT PRECISION=$PRECISION ENABLE_THINKING=$ENABLE_THINKING SAMPLE_LIMIT=$SAMPLE_LIMIT ATTN_IMPL=$ATTN_IMPL"
 
 PREPARE_ARGS=(python "$SKILL_DIR/scripts/prepare_data.py" --output-dir "$DATA_DIR")
 if [[ "$FORCE_DATA" == "1" ]]; then
@@ -144,20 +170,32 @@ if [[ "$COMPLIANCE_CHECK" == "1" ]]; then
   python "$SKILL_DIR/scripts/check_competition_compliance.py" --model-id "$MODEL_ID"
 fi
 
-python "$SKILL_DIR/scripts/train_lora_baseline.py" \
-  --model-id "$MODEL_ID" \
-  --train-file "$DATA_DIR/train_all.jsonl" \
-  --output-dir "$OUTPUT_DIR" \
-  --epochs "$EPOCHS" \
-  --max-length "$MAX_LENGTH" \
-  --batch-size "$BATCH_SIZE" \
-  --grad-accum "$GRAD_ACCUM" \
-  --lr "$LR" \
-  --lora-r "$LORA_R" \
-  --lora-alpha "$LORA_ALPHA" \
-  --adapter-base-model-name "OpenOneRec/OneReason-0.8B-pretrain-competition" \
-  --attn-impl "$ATTN_IMPL" \
+TRAIN_ARGS=(
+  python "$SKILL_DIR/scripts/train_lora_baseline.py"
+  --model-id "$MODEL_ID"
+  --train-file "$DATA_DIR/train_all.jsonl"
+  --output-dir "$OUTPUT_DIR"
+  --epochs "$EPOCHS"
+  --max-length "$MAX_LENGTH"
+  --batch-size "$BATCH_SIZE"
+  --grad-accum "$GRAD_ACCUM"
+  --lr "$LR"
+  --lora-r "$LORA_R"
+  --lora-alpha "$LORA_ALPHA"
+  --lora-dropout "$LORA_DROPOUT"
+  --warmup-ratio "$WARMUP_RATIO"
+  --lr-scheduler-type "$LR_SCHEDULER_TYPE"
+  --weight-decay "$WEIGHT_DECAY"
+  --save-steps "$SAVE_STEPS"
+  --precision "$PRECISION"
+  --adapter-base-model-name "OpenOneRec/OneReason-0.8B-pretrain-competition"
+  --attn-impl "$ATTN_IMPL"
   --sample-limit "$SAMPLE_LIMIT"
+)
+if [[ "$ENABLE_THINKING" == "1" ]]; then
+  TRAIN_ARGS+=(--enable-thinking)
+fi
+"${TRAIN_ARGS[@]}"
 
 rm -rf "$UPLOAD_DIR"
 mkdir -p "$UPLOAD_DIR"

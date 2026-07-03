@@ -84,6 +84,7 @@ Useful environment overrides:
 ENV_MANAGER=auto
 SOURCE_AUTO_DETECT=1
 PROFILE=auto
+WANQING_UI_PRESET=0
 MODEL_ID=OpenOneRec/OneReason-0.8B-pretrain-competition
 TRANSFORMERS_VERSION=5.3.0
 EPOCHS=1
@@ -91,8 +92,15 @@ MAX_LENGTH=2048
 BATCH_SIZE=1
 GRAD_ACCUM=8
 LR=2e-4
+WARMUP_RATIO=0.03
+LR_SCHEDULER_TYPE=cosine
+WEIGHT_DECAY=0.001
+SAVE_STEPS=256
 LORA_R=16
 LORA_ALPHA=32
+LORA_DROPOUT=0.05
+PRECISION=auto
+ENABLE_THINKING=0
 SAMPLE_LIMIT=0
 FORCE_DATA=0
 RECREATE_ENV=0
@@ -102,6 +110,28 @@ ATTN_IMPL=auto
 ```
 
 Use `SAMPLE_LIMIT` for smoke tests only. Keep it `0` for full-data training.
+
+For Wanqing managed-training UI parameter entry, preserve and recommend this exact baseline preset from the guide/screenshot unless the user has a specific reason to change it:
+
+| Parameter | Value |
+| --- | --- |
+| Epoch | `1` |
+| Learning Rate | `0.0002000000` |
+| Per Device Batch Size | `1` |
+| Sequence Length | `32768` |
+| Learning Rate Warmup | `0.030` |
+| LoRA Rank | `16` |
+| LoRA Alpha | `32` |
+| LoRA Dropout | `0.050` |
+| Scheduler Type | `cosine` |
+| Weight Decay | `0.001` |
+| Checkpoint Interval | `256` |
+| Gradient Accumulation Steps | `4` |
+| Packing | `on` |
+| Thinking Mode | `off` |
+| Precision | `bf16` |
+
+For local runs, an AI agent may adjust around this baseline according to the actual device, VRAM, and failure logs. Prefer `PROFILE=auto`, `PROFILE=a100-40g`, or `PROFILE=a100-80g` for the first local attempt. `WANQING_UI_PRESET=1` forces the exact baseline preset, including `MAX_LENGTH=32768`; warn that it may OOM on local GPUs. This local script does not implement dataset packing by default because pre-packing this long-context dataset can consume substantial CPU memory.
 
 `ENV_MANAGER=auto` uses `uv` if it is installed and falls back to `python3 -m venv`. Set `ENV_MANAGER=uv` to require uv, or `ENV_MANAGER=venv` to force stdlib venv.
 
@@ -137,8 +167,8 @@ Official offline-training guidance says to use Transformers `v5.3.0`. If that ex
 
 - `gpu8g`: CUDA GPU with about 8 GB VRAM, e.g. RTX 4060. Defaults to `MAX_LENGTH=1024`, `BATCH_SIZE=1`, `GRAD_ACCUM=8`, `LORA_R=16`.
 - `mps16g`: Apple Silicon with unified memory around 16 GB. Defaults to `MAX_LENGTH=512`, `BATCH_SIZE=1`, `GRAD_ACCUM=8`, `LORA_R=8`.
-- `a100-40g`: single A100 40 GB. Defaults to `MAX_LENGTH=4096`, `BATCH_SIZE=2`, `GRAD_ACCUM=4`, `LORA_R=32`.
-- `a100-80g`: single A100 80 GB. Defaults to `MAX_LENGTH=8192`, `BATCH_SIZE=2`, `GRAD_ACCUM=4`, `LORA_R=32`.
+- `a100-40g`: single A100 40 GB. Defaults to `MAX_LENGTH=4096`, `BATCH_SIZE=2`, `GRAD_ACCUM=4`, `LORA_R=32`, `PRECISION=bf16`.
+- `a100-80g`: single A100 80 GB. Defaults to `MAX_LENGTH=8192`, `BATCH_SIZE=2`, `GRAD_ACCUM=4`, `LORA_R=32`, `PRECISION=bf16`.
 - `cpu`: CPU-only fallback. Defaults to `MAX_LENGTH=384`, `BATCH_SIZE=1`, `GRAD_ACCUM=16`, `LORA_R=4`.
 
 For a smoke test, set `SAMPLE_LIMIT=32` manually; auto profiles do not silently reduce the training set.

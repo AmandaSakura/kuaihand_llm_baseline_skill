@@ -63,16 +63,33 @@ def resolve_attention_impl(requested: str) -> tuple[str | None, str]:
     raise ValueError(f"Unsupported attention implementation: {requested}")
 
 
-def build_sft_features(tokenizer, rec: dict, max_length: int) -> dict:
+def apply_chat_template(tokenizer, messages: list[dict], *, add_generation_prompt: bool, enable_thinking: bool) -> str:
+    kwargs = {
+        "tokenize": False,
+        "add_generation_prompt": add_generation_prompt,
+    }
+    try:
+        return tokenizer.apply_chat_template(messages, enable_thinking=enable_thinking, **kwargs)
+    except TypeError:
+        return tokenizer.apply_chat_template(messages, **kwargs)
+
+
+def build_sft_features(tokenizer, rec: dict, max_length: int, enable_thinking: bool = False) -> dict:
     messages = []
     if rec.get("system"):
         messages.append({"role": "system", "content": rec["system"]})
     messages.append({"role": "user", "content": rec["prompt"]})
-    prompt_text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-    full_text = tokenizer.apply_chat_template(
+    prompt_text = apply_chat_template(
+        tokenizer,
+        messages,
+        add_generation_prompt=True,
+        enable_thinking=enable_thinking,
+    )
+    full_text = apply_chat_template(
+        tokenizer,
         messages + [{"role": "assistant", "content": rec["response"]}],
-        tokenize=False,
         add_generation_prompt=False,
+        enable_thinking=enable_thinking,
     )
     prompt_ids = tokenizer(prompt_text, add_special_tokens=False)["input_ids"]
     full_ids = tokenizer(full_text, add_special_tokens=False)["input_ids"]
@@ -125,17 +142,18 @@ def load_rows(data_dir: Path, eval_fraction: float, seed: int, max_examples: int
 
 
 class EvalDataset(Dataset):
-    def __init__(self, rows: list[dict], tokenizer, max_length: int):
+    def __init__(self, rows: list[dict], tokenizer, max_length: int, enable_thinking: bool = False):
         self.rows = rows
         self.tokenizer = tokenizer
         self.max_length = max_length
+        self.enable_thinking = enable_thinking
 
     def __len__(self):
         return len(self.rows)
 
     def __getitem__(self, index):
         rec = self.rows[index]
-        features = build_sft_features(self.tokenizer, rec, self.max_length)
+        features = build_sft_features(self.tokenizer, rec, self.max_length, self.enable_thinking)
         features.update({"task": rec["task"], "file": rec["file"]})
         return features
 
@@ -215,7 +233,12 @@ def generation_eval(model, tokenizer, rows: list[dict], args, device):
         if rec.get("system"):
             messages.append({"role": "system", "content": rec["system"]})
         messages.append({"role": "user", "content": rec["prompt"]})
-        prompt_text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        prompt_text = apply_chat_template(
+            tokenizer,
+            messages,
+            add_generation_prompt=True,
+            enable_thinking=args.enable_thinking,
+        )
         inputs = tokenizer(prompt_text, return_tensors="pt", truncation=True, max_length=args.max_length).to(device)
         with torch.no_grad():
             output = model.generate(
@@ -256,6 +279,7 @@ def main() -> None:
     parser.add_argument("--generation-samples", type=int, default=0)
     parser.add_argument("--max-new-tokens", type=int, default=256)
     parser.add_argument("--attn-impl", default="auto", choices=["auto", "default", "sdpa", "flash_attention_2", "eager"])
+    parser.add_argument("--enable-thinking", action="store_true")
     parser.add_argument("--trust-remote-code", action="store_true")
     args = parser.parse_args()
 
@@ -273,7 +297,7 @@ def main() -> None:
     model, attention = load_model(args, dtype)
     device = next(model.parameters()).device
 
-    dataset = EvalDataset(rows, tokenizer, args.max_length)
+    dataset = EvalDataset(rows, tokenizer, args.max_length, args.enable_thinking)
     dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=False, collate_fn=collate_with_meta(tokenizer))
     losses = loss_eval(model, dataloader, device)
     generation = generation_eval(model, tokenizer, rows, args, device) if args.generation_samples else None
@@ -293,6 +317,7 @@ def main() -> None:
         "selected_examples": len(rows),
         "max_length": args.max_length,
         "attention": attention,
+        "enable_thinking": args.enable_thinking,
         "loss": losses,
         "generation": generation,
     }
